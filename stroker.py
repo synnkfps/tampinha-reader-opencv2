@@ -1,55 +1,58 @@
 import cv2
 import numpy as np
-import time
 
-print('Processing the image...')
-s = time.time()
-# Carregar a imagem
-image = cv2.imread('outputs/2.png')
-RESOLUTION_SCALE = 0.5
-image = cv2.resize(image, (int(image.shape[1]*(RESOLUTION_SCALE)), int(image.shape[0]*(RESOLUTION_SCALE))))
+INPUT = '2.png' # /outputs/X.png
 
-# Converter para escala de cinza
-gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-cv2.imshow('original', gray)
+# settings variables (dicts are mutable globally)
+settings = {"X_STEP": 3, "Y_STEP": 3, "RECT_WIDTH": 2, "RECT_HEIGHT": 2, "SHOW_UNSET": False, "FILL_UNSET": False}
+# colors variables, BGR cuz opencv2 is :skull:
+colors = {"EMPTY_B": 0, "EMPTY_G": 0, "EMPTY_R": 255} 
 
-e = time.time()
-print(f'Image Processing took {e-s:.3f}s')
+cv2.namedWindow('image', cv2.WINDOW_KEEPRATIO)
+cv2.setWindowProperty('image', 1, cv2.WINDOW_NORMAL)
 
-# Definir o tamanho do retângulo
-x_step = 3
-y_step = 3
+# main render pipeline
+def render():
+    RESOLUTION_SCALE = 0.5 # image scaling (later ill add trackbar support)
 
-rectangle_width = 2
-rectangle_height = 2
+    image = cv2.imread('outputs/'+INPUT)
+    image = cv2.resize(image, (int(image.shape[1]*(RESOLUTION_SCALE)), int(image.shape[0]*(RESOLUTION_SCALE))))
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-r_w = x_step+rectangle_width
-r_h = y_step+rectangle_height
+    # rectangle calculations
+    r_w = settings['X_STEP'] + settings['RECT_WIDTH']
+    r_h = settings['Y_STEP'] + settings['RECT_HEIGHT']
 
-SHOW_UNSET = False
-FILL_UNSET = True
+    # step Y and step X
+    for y in range(0, gray.shape[0], settings['Y_STEP']):
+        for x in range(0, gray.shape[1], settings['X_STEP']):
+            region = gray[y:y+settings['Y_STEP'], x:x+settings['X_STEP']] # not sure if its a square, i may be checking soon
 
-print('Redering the image...')
-s = time.time()
+            # undetected areas
+            if settings['SHOW_UNSET']: 
+                cv2.rectangle(image, (x, y), (x+r_w, y+r_h), (colors['EMPTY_B'], colors['EMPTY_G'], colors['EMPTY_R']), -1 if settings['FILL_UNSET'] else 1)
+            
+            # detected areas
+            if np.any(region < 255): 
+                cv2.rectangle(image, (x, y), (x+r_w, y+r_h), (0, 0, 0), -1)
 
-# Percorrer a imagem com um passo de 10 pixels ao longo dos eixos x e y
-for y in range(0, gray.shape[0], y_step):
-    for x in range(0, gray.shape[1], x_step):
-        # Extrair a região de pixels
-        region = gray[y:y+y_step, x:x+x_step]
+    cv2.imshow('image', image)
 
-        if SHOW_UNSET: cv2.rectangle(image, (x, y), (x+r_w, y+r_h), (230, 230, 230), -1 if FILL_UNSET else 1)
-        
-        # Verificar se existe pelo menos um pixel preto na região
-        if np.any(region < 255):
-            cv2.rectangle(image, (x, y), (x+r_w, y+r_h), (0, 0, 0), -1)
+render() # initial rendering
+# image trackbars
+cv2.createTrackbar('X STEPS', 'image', settings['X_STEP'], 60, lambda value: (settings.update({"X_STEP": value}), render()))
+cv2.createTrackbar('Y STEPS', 'image', settings['Y_STEP'], 60, lambda value: (settings.update({"Y_STEP": value}), render()))
+cv2.createTrackbar('R. WIDTH', 'image', settings['RECT_WIDTH'], 100, lambda value: (settings.update({"RECT_WIDTH": value}), render()))
+cv2.createTrackbar('R. HEIGHT', 'image', settings['RECT_HEIGHT'], 100, lambda value: (settings.update({"RECT_HEIGHT": value}), render()))
 
-else:
-    print('Image is being displayed.')
-e = time.time()
-print(f'Image rendering took {e-s:.2f}s')
+# grid trackbars
+cv2.namedWindow('grid')
+cv2.createTrackbar('Show Empty', 'grid', settings['SHOW_UNSET'], 1, lambda value: (settings.update({"SHOW_UNSET": True if value==1 else False}), render()))
+cv2.createTrackbar('Fill Empty', 'grid', settings['FILL_UNSET'], 1, lambda value: (settings.update({"FILL_UNSET": True if value==1 else False}), render()))
+cv2.createTrackbar('Empty R', 'grid', colors['EMPTY_R'], 255, lambda value: (colors.update({"EMPTY_R": value}), render()))
+cv2.createTrackbar('Empty G', 'grid', colors['EMPTY_G'], 255, lambda value: (colors.update({"EMPTY_G": value}), render()))
+cv2.createTrackbar('Empty B', 'grid', colors['EMPTY_B'], 255, lambda value: (colors.update({"EMPTY_B": value}), render()))
 
-# Exibir a imagem modificada
-cv2.imshow('Imagem', image)
+# handlers
 cv2.waitKey(0)
 cv2.destroyAllWindows()
