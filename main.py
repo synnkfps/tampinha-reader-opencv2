@@ -1,34 +1,74 @@
 import cv2
+import numpy as np
 
-image = cv2.imread("inputs/tampinha3.jpg") # your input image
-gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+def zoom_image(image, zoom_factor):
+    height, width = image.shape[:2]
+    new_height = int(height / zoom_factor)
+    new_width = int(width / zoom_factor)
+    
+    start_row = int((height - new_height) / 2)
+    start_col = int((width - new_width) / 2)
+    end_row = start_row + new_height
+    end_col = start_col + new_width
+    
+    zoomed_image = image[start_row:end_row, start_col:end_col]
+    zoomed_image = cv2.resize(zoomed_image, (width, height))
+    
+    return zoomed_image
 
-vars = {"EXPOSURE": 6, "USE_ADAPTIVE": 0, "BLOCK_SIZE": 41, "USE_OTSU": 1, "INVERTED": 0}
+def zoom(img, zoom=1):
+    cy, cx = [img.shape[0], img.shape[1]]
+    
+    rot_mat = cv2.getRotationMatrix2D((cx,cy), 0, zoom)
+    result = cv2.warpAffine(img, rot_mat, img.shape[1::-1], flags=cv2.INTER_LINEAR)
+    
+    return result
 
+# Variables
+INPUT_NAME = '2.jpg' # inputs/input_name
+OUTPUT_NAME = f'{INPUT_NAME[:INPUT_NAME.index(".")]}.png' # outputs/X.png
+
+WRITE = True
+SHOW = True
+
+SCALE = 0.5
+
+# Settings dict (cuz dict is globally mutable)
+settings = {"ZOOM": 3, "EXPOSURE": 9, "BLOCK_SIZE": 21,"USE_ADAPTIVE": True, "ADAPTIVE_METHOD": cv2.ADAPTIVE_THRESH_GAUSSIAN_C}
+
+# Render "Pipeline"
+# renders everything in a single trigger
 def render():
-    if vars['USE_ADAPTIVE'] == 0:
-        t_type = cv2.THRESH_OTSU if vars['USE_OTSU'] == 1 else cv2.THRESH_BINARY if vars['INVERTED'] == 0 else cv2.THRESH_BINARY_INV
-        _, thresholded = cv2.threshold(gray_image, vars['EXPOSURE'], 255, t_type)
-    
-    if vars['USE_ADAPTIVE'] == 1:
-        thresholded = cv2.adaptiveThreshold(gray_image, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY if vars['INVERTED'] == 0 else cv2.THRESH_BINARY_INV, vars['BLOCK_SIZE'], vars['EXPOSURE'])
-    
-    cv2.namedWindow('Thresholded Image',  cv2.WINDOW_NORMAL)
-    cv2.imshow("Thresholded Image", thresholded)
-    cv2.setWindowProperty('Thresholded Image', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_NORMAL)
+    # process image
+    img = cv2.imread(f'inputs/{INPUT_NAME}')
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = zoom_image(img, settings['ZOOM'])
+    img = cv2.resize(img, (int(img.shape[1]*SCALE), int(img.shape[0]*SCALE)))
 
-cv2.namedWindow('Parameters')
-# Hacky lambda way so i dont need to add functions
-cv2.createTrackbar('Threshold', 'Parameters', vars['EXPOSURE'], 150, lambda x: (vars.update({"EXPOSURE": x}), render()))
-cv2.createTrackbar('Block Size', 'Parameters', vars['BLOCK_SIZE'], 100, lambda x: (vars.update({"BLOCK_SIZE": x if x>1 and x%2!=0 else vars['BLOCK_SIZE']}), render()))
-cv2.createTrackbar('Use Adaptive', 'Parameters', vars['USE_ADAPTIVE'], 1, lambda x: (vars.update({"USE_ADAPTIVE": x}), render()))
-cv2.createTrackbar('Use OTSU', 'Parameters', vars['USE_OTSU'], 1, lambda x: (vars.update({"USE_OTSU": x}), render()))
-cv2.createTrackbar('Inverted', 'Parameters', vars['INVERTED'], 1, lambda x: (vars.update({"INVERTED": x}), render()))
-
-while True:
-    render()
+    output_img = img
+    # Adaptive Threshold do not need to be an array variable (_,var)
+    if settings['USE_ADAPTIVE']: 
+        output_img = cv2.adaptiveThreshold(img, 255, settings['ADAPTIVE_METHOD'], cv2.THRESH_BINARY, settings['BLOCK_SIZE'], settings['EXPOSURE'])
+    else: 
+        # binary/normal threshold do not use BLOCK_SIZE
+        rect,output_img = cv2.threshold(img, settings['EXPOSURE'], 255, cv2.THRESH_BINARY)
     
-    if cv2.waitKey(1) == 27 or cv2.waitKey(0):
-        break
+    cv2.imshow('Thresholded Image', output_img) # self explanatory
+    if WRITE: 
+        cv2.imwrite(f'outputs/{OUTPUT_NAME}', output_img)
 
+# Window Properties
+cv2.namedWindow('Thresholded Image', cv2.WINDOW_KEEPRATIO)
+cv2.resizeWindow('Thresholded Image', 600, 900)
+cv2.setWindowProperty('image', 1, cv2.WINDOW_NORMAL)
+
+# Trackbars with lambda trick
+cv2.createTrackbar('Exposure', 'Thresholded Image', settings['EXPOSURE'], 255, lambda value: (settings.update({'EXPOSURE': value}), render()))
+cv2.createTrackbar('Block Size', 'Thresholded Image', settings['BLOCK_SIZE'], 60, lambda value: (settings.update({'BLOCK_SIZE': value if value>1 and value%2!=0 else settings['BLOCK_SIZE']}), render()))
+cv2.createTrackbar('Adaptive', 'Thresholded Image', settings['USE_ADAPTIVE'], 1, lambda value: (settings.update({'USE_ADAPTIVE': value == 1}), render()))
+cv2.createTrackbar('Adap. Method', 'Thresholded Image', settings['ADAPTIVE_METHOD'], 1, lambda value: (settings.update({'ADAPTIVE_METHOD': cv2.ADAPTIVE_THRESH_GAUSSIAN_C if value == 0 else cv2.ADAPTIVE_THRESH_MEAN_C}), render()))
+cv2.createTrackbar('Zoom', 'Thresholded Image', 1, 10, lambda value: (settings.update({'ZOOM': value}), render()))
+
+# Window Closing Callbacks
+cv2.waitKey(0)
 cv2.destroyAllWindows()
