@@ -1,23 +1,7 @@
 import cv2
-import numpy as np
 
-def zoom_image(image, zoom_factor):
-    height, width = image.shape[:2]
-    new_height = int(height / zoom_factor)
-    new_width = int(width / zoom_factor)
-    
-    start_row = int((height - new_height) / 2)
-    start_col = int((width - new_width) / 2)
-    end_row = start_row + new_height
-    end_col = start_col + new_width
-    
-    zoomed_image = image[start_row:end_row, start_col:end_col]
-    zoomed_image = cv2.resize(zoomed_image, (width, height))
-    
-    return zoomed_image
-
-def zoom(img, zoom=1):
-    cy, cx = [img.shape[0], img.shape[1]]
+def zoom_image(img, zoom=1):
+    cy, cx = [int(img.shape[0]/2), int(img.shape[1]/2)]
     
     rot_mat = cv2.getRotationMatrix2D((cx,cy), 0, zoom)
     result = cv2.warpAffine(img, rot_mat, img.shape[1::-1], flags=cv2.INTER_LINEAR)
